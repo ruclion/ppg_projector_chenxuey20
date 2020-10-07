@@ -4,18 +4,18 @@ from tqdm import tqdm
 import time
 from sklearn.cluster import KMeans
 
-cn_raw_list_path = '/datapool/home/hujk17/chenxueyuan/DataBaker_Bilingual_CN/meta_good.txt'
+cn_raw_list_path = '/datapool/home/hujk17/chenxueyuan/DataBaker_Bilingual_CN/meta_small.txt'
 cn_raw_ppg_path = '/datapool/home/hujk17/chenxueyuan/DataBaker_Bilingual_CN/ppg_from_generate_batch'
 cn_raw_linear_dir ='/datapool/home/hujk17/chenxueyuan/DataBaker_Bilingual_CN/spec_5ms_by_audio_2'
 
-en_raw_list_path = '/datapool/home/hujk17/chenxueyuan/LJSpeech-1.1/meta_good.txt'
+en_raw_list_path = '/datapool/home/hujk17/chenxueyuan/LJSpeech-1.1/meta_small.txt'
 en_raw_ppg_path = '/datapool/home/hujk17/chenxueyuan/LJSpeech-1.1/ppg_from_generate_batch'
 en_raw_linear_dir = '/datapool/home/hujk17/chenxueyuan/LJSpeech-1.1/spec_5ms_by_audio_2'
 
-en_final_cn_log_path = '/datapool/home/hujk17/chenxueyuan/en_final_cn_log'
+en_final_cn_log_path = '/datapool/home/hujk17/chenxueyuan/en_final_cn_log_small'
 if os.path.exists(en_final_cn_log_path) is False:
     os.makedirs(en_final_cn_log_path)
-en_final_cn_idx_path = os.path.join(en_final_cn_log_path, 'en_final_cn_idx.npy')
+en_final_cn_idx_path = os.path.join(en_final_cn_log_path, 'en_final_cn_idx_small.npy')
 
 # f = open(en_final_cn_idx, 'w')
 # f......
@@ -25,22 +25,16 @@ en_final_cn_idx_path = os.path.join(en_final_cn_log_path, 'en_final_cn_idx.npy')
 Linear_DIM = 201
 PPG_DIM = 345                                              #每一帧ppg的维度
 # !!!!!!
-K_small = 5     #类
+K_small = 15     #类
 K = 20000     #类
-
-en_all_cnt = 1
-cn_all_cnt = 1000
 
 def en_text2list(file):                                       #封装读出每一句英文ppg文件名的函数，输入文本，得到每一句ppg文件名序列的列表
     en_file_list = []
-    global en_all_cnt
-    with open(file, 'r') as f: 
-        for i, line in enumerate(f.readlines()):
+    with open(file, 'r') as f:
+        for line in f.readlines():
             # !!!!!!!!!!!!!!!!
-            en_file_list.append(line.strip())
-            if i >= en_all_cnt - 1:
-                break
-    print('en len:', len(en_file_list), 'en:', en_file_list[:min(3, en_all_cnt)])
+            en_file_list.append(line.strip().split('|')[0])
+    print('en:', en_file_list)
     return en_file_list
 
 
@@ -49,19 +43,16 @@ def en_text2list(file):                                       #封装读出每�
 
 def cn_text2list(file):                                #封装读出每一句中文ppg文件名的函数，输入文本，得到每一句ppg文件名序列的列表
     cn_file_list = []
-    global cn_all_cnt
     with open(file, 'r') as f:
         a = [i.strip() for i in f.readlines()]
-        # print(a[0])
-        # print(a[1])
+        print(a[0])
+        print(a[1])
         i = 0
         while i < len(a):
-            fname = a[i]
+            fname = a[i][:6]
             cn_file_list.append(fname)
-            i += 1
-            if i >= cn_all_cnt:
-                break
-    print('cn len:', len(cn_file_list), 'cn:', cn_file_list[:min(3, cn_all_cnt)])
+            i += 2
+    print('cn:', cn_file_list)
     return cn_file_list
 
 
@@ -85,18 +76,15 @@ def get_single_data_pair(fname, ppgs_dir, linears_dir):           #输入每一�
 def for_loop_en():                                         #得到每一帧的英文ppg列表
     en_file_list = en_text2list(file=en_raw_list_path)
     en_ppgs_ls = []
-    for f in tqdm(en_file_list):
+    for f in en_file_list:
         wav_ppgs, linears = get_single_data_pair(f, ppgs_dir=en_raw_ppg_path, linears_dir=en_raw_linear_dir)
         # 需要确认下
-        en_ppgs_ls.extend(list(wav_ppgs))
+        # en_ppgs_ls.extend(list(wav_ppgs))
         # 或者
-        # for i in range(wav_ppgs.shape[0]):
-        #     # ppg[i]
-        #     en_ppgs_ls.append(wav_ppgs[i])
-        #     # find_jin(ppg[i])
-        # 只考虑第一句话
-        print('en now only sentence:', f)
-        # break
+        for i in range(wav_ppgs.shape[0]):
+            # ppg[i]
+            en_ppgs_ls.append(wav_ppgs[i])
+            # find_jin(ppg[i])
     # shuffule
     # wav_id, frame_id
     return en_ppgs_ls
@@ -105,15 +93,15 @@ def for_loop_en():                                         #得到每一帧的�
 def for_loop_cn():                                         #得到每一帧的中文ppg列表
     cn_file_list = cn_text2list(file=cn_raw_list_path)
     cn_ppgs_ls = []
-    for f in tqdm(cn_file_list):
+    for f in cn_file_list:
         wav_ppgs, linears = get_single_data_pair(f, ppgs_dir=cn_raw_ppg_path, linears_dir=cn_raw_linear_dir)
         # 需要确认下
-        cn_ppgs_ls.extend(list(wav_ppgs))
+        # en_ppgs_ls.extend(list(wav_ppgs))en_raw_data_path
         # 或者
-        # for i in range(wav_ppgs.shape[0]):
-        #     # ppg[i]
-        #     cn_ppgs_ls.append(wav_ppgs[i])
-        #     # find_jin(ppg[i])
+        for i in range(wav_ppgs.shape[0]):
+            # ppg[i]
+            cn_ppgs_ls.append(wav_ppgs[i])
+            # find_jin(ppg[i])
     # shuffule
     # wav_id, frame_id
     return cn_ppgs_ls
@@ -162,7 +150,7 @@ def hjk_main1():                                         #
 
 
 def main():
-    print('start program')
+   
     en_l = for_loop_en()     #英文每一帧ppg的列表 en_l = [en_ppg1,en_ppg2,...]
     cn_l = for_loop_cn()     #中文每一帧ppg的列表 cn_l = [cn_ppg1,cn_ppg2,...]
     all_l = en_l + cn_l          #中英文混合后的ppg的列表
@@ -206,9 +194,8 @@ def main():
         for j in class_cn_ppgs[now_class]:      #class_cn_ppgs[now_class] = [2,8,19,...]或[3,48,79,...]或[4,5,36,...]或... eg,[2,8,19,...]
             e = en_l[i]                         #e = en_l[0], en_l[1], en_l[2], ...
             c = cn_l[j]                         #c = cn_l[2], cn_l[8], ...
-            dist_e_c = dist(e, c)
-            if dist_e_c < ans:
-                ans = dist_e_c
+            if dist(e, c) < ans:
+                ans = dist(e, c)
                 ans_id = j                      #cn_id  距离每一个en_ppg最近的cn_ppg的帧id
                 # ans_id_etc = c                  #cn_l[j] 
         # 已经找到最接近的了，记下来

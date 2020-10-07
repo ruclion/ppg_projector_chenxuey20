@@ -3,6 +3,8 @@ import numpy as np
 from tqdm import tqdm
 import time
 from sklearn.cluster import KMeans
+from sklearn.neighbors import KDTree
+eps = 1e-6
 
 cn_raw_list_path = '/datapool/home/hujk17/chenxueyuan/DataBaker_Bilingual_CN/meta_good.txt'
 cn_raw_ppg_path = '/datapool/home/hujk17/chenxueyuan/DataBaker_Bilingual_CN/ppg_from_generate_batch'
@@ -12,10 +14,10 @@ en_raw_list_path = '/datapool/home/hujk17/chenxueyuan/LJSpeech-1.1/meta_good.txt
 en_raw_ppg_path = '/datapool/home/hujk17/chenxueyuan/LJSpeech-1.1/ppg_from_generate_batch'
 en_raw_linear_dir = '/datapool/home/hujk17/chenxueyuan/LJSpeech-1.1/spec_5ms_by_audio_2'
 
-en_final_cn_log_path = '/datapool/home/hujk17/chenxueyuan/en_final_cn_log'
+en_final_cn_log_path = '/datapool/home/hujk17/chenxueyuan/en_final_cn_log_withkdtree'
 if os.path.exists(en_final_cn_log_path) is False:
     os.makedirs(en_final_cn_log_path)
-en_final_cn_idx_path = os.path.join(en_final_cn_log_path, 'en_final_cn_idx.npy')
+en_final_cn_idx_path = os.path.join(en_final_cn_log_path, 'en_final_cn_idx_withkdtree.npy')
 
 # f = open(en_final_cn_idx, 'w')
 # f......
@@ -25,11 +27,11 @@ en_final_cn_idx_path = os.path.join(en_final_cn_log_path, 'en_final_cn_idx.npy')
 Linear_DIM = 201
 PPG_DIM = 345                                              #每一帧ppg的维度
 # !!!!!!
-K_small = 5     #类
+K_small = 1     #类
 K = 20000     #类
 
 en_all_cnt = 1
-cn_all_cnt = 1000
+cn_all_cnt = 5000
 
 def en_text2list(file):                                       #封装读出每一句英文ppg文件名的函数，输入文本，得到每一句ppg文件名序列的列表
     en_file_list = []
@@ -140,6 +142,32 @@ def cluster_kmeans(all, K):                               #聚类，输入是所
     return class_as_index
 
 
+def bruce_find_closest(i, now_class, en_l, cn_l, class_cn_ppgs):
+    ans = 1e100     #科学计数法  1*10的100次方
+    ans_id = -1     
+    # ans_id_etc = -1
+    for j in class_cn_ppgs[now_class]:      #class_cn_ppgs[now_class] = [2,8,19,...]或[3,48,79,...]或[4,5,36,...]或... eg,[2,8,19,...]
+        e = en_l[i]                         #e = en_l[0], en_l[1], en_l[2], ...
+        c = cn_l[j]                         #c = cn_l[2], cn_l[8], ...
+        dist_e_c = dist(e, c)
+        if dist_e_c < ans:
+            ans = dist_e_c
+            ans_id = j                      #cn_id  距离每一个en_ppg最近的cn_ppg的帧id
+            # ans_id_etc = c                  #cn_l[j] 
+    # 已经找到最接近的了，记下来
+    return ans, ans_id
+
+def kdtree_find_closest(i, en_l, now_class_cn_ppgs_value_kdtree, now_class_cn_ppgs):
+    e = en_l[i]
+    e_2d = np.expand_dims(e, axis=0)
+    # print(e_2d.shape)
+    dist, ind = now_class_cn_ppgs_value_kdtree.query(e_2d)
+    # print(dist, ind)
+    dist = dist[0][0]
+    ind = ind[0][0]
+    real_ind = now_class_cn_ppgs[ind]
+    return dist, real_ind
+
 '''
 def hjk_main1():                                         #
     # in cn & in en
@@ -167,14 +195,20 @@ def main():
     cn_l = for_loop_cn()     #中文每一帧ppg的列表 cn_l = [cn_ppg1,cn_ppg2,...]
     all_l = en_l + cn_l          #中英文混合后的ppg的列表
     
+    print('start cluster...')
     # 需要快速的聚类                        #all_l=[en_ppg1,en_ppg2,...,cn_ppg1,cn_ppg2,...]
     all_class = cluster_kmeans(all_l, K_small)   #all_class=[en_label,en_label,...,cn_label,cn_label,...]
-
+    print('end cluster...')
     #... a[100], a[0].1, 2, 3,...  
     class_cn_ppgs = list()                      #建立一个列表class_cn_ppgs，列表中包含K个空列表class_cn_ppg = [[],[],[],...]
+    class_cn_ppgs_value = list()
+    class_cn_ppgs_value_kdtree = list()
     for i in range(K_small):
         l = list()
         class_cn_ppgs.append(l)    #append()在列表后面添加元素
+        l_value = list()
+        class_cn_ppgs_value.append(l_value)
+        
 
     # int a[10][10];
     # a[0][0] = 888
@@ -187,32 +221,34 @@ def main():
         idx = i + len(en_l)
         now_class = all_class[idx]                #now_class = cn_label  可能是0-1999
         class_cn_ppgs[now_class].append(i)        #class_cn_ppg = [[2,8,19,...],[3,48,79,...],[4,5,36,...],...] 2000个类，每个类中含有cn_l中对应帧ppg的序列号
+        class_cn_ppgs_value[now_class].append(cn_l[i])
+        
     # 看下哪些类中没有中文的PPG
+    print('start kdtree')
     have_cnt = 0
-    for i in range(K_small):
+    for i in tqdm(range(K_small)):
         l = len(class_cn_ppgs[i])
         if l > 0:
             have_cnt += 1
-            print('-----:', i)
+            print('-----:', i, l)
+            class_cn_ppgs_value[i] = np.asarray(class_cn_ppgs_value[i])
+            class_cn_ppgs_value_kdtree.append(KDTree(class_cn_ppgs_value[i], leaf_size=40) )
     print('have class:', have_cnt)
+    print('end kdtree')
+    
 
     # 开始寻找en对应的类内所有中文ppg离他最近的
     en_final_cn_idx = np.zeros((len(en_l))) # a[1000000] np.zeros()返回来一个给定形状和类型的用0填充的数组；
     for i in tqdm(range(len(en_l))):                   #遍历英文ppg列表，
         now_class = all_class[i]                   #now_class = en_label  可能是0-1999 
-        ans = 1e100     #科学计数法  1*10的100次方
-        ans_id = -1     
-        # ans_id_etc = -1
-        for j in class_cn_ppgs[now_class]:      #class_cn_ppgs[now_class] = [2,8,19,...]或[3,48,79,...]或[4,5,36,...]或... eg,[2,8,19,...]
-            e = en_l[i]                         #e = en_l[0], en_l[1], en_l[2], ...
-            c = cn_l[j]                         #c = cn_l[2], cn_l[8], ...
-            dist_e_c = dist(e, c)
-            if dist_e_c < ans:
-                ans = dist_e_c
-                ans_id = j                      #cn_id  距离每一个en_ppg最近的cn_ppg的帧id
-                # ans_id_etc = c                  #cn_l[j] 
-        # 已经找到最接近的了，记下来
+
+        # 暴力寻找
+        # ans1, ans_id1 = bruce_find_closest(i, now_class, en_l, cn_l, class_cn_ppgs)
+        ans, ans_id = kdtree_find_closest(i, en_l, class_cn_ppgs_value_kdtree[now_class], class_cn_ppgs[now_class])
+        # assert np.absolute(ans1 - ans) < eps and ans_id1 == ans_id
         en_final_cn_idx[i] = ans_id
+
+
         
     np.save(en_final_cn_idx_path, en_final_cn_idx)
 

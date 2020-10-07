@@ -38,12 +38,12 @@ en_raw_list_path = '/datapool/home/hujk17/chenxueyuan/LJSpeech-1.1/meta_good.txt
 en_raw_ppg_path = '/datapool/home/hujk17/chenxueyuan/LJSpeech-1.1/ppg_from_generate_batch'
 en_raw_linear_dir = '/datapool/home/hujk17/chenxueyuan/LJSpeech-1.1/spec_5ms_by_audio_2'
 
-en_final_cn_log_path = '/datapool/home/hujk17/chenxueyuan/en_final_cn_log'
-en_final_cn_idx_path = os.path.join(en_final_cn_log_path, 'en_final_cn_idx.npy')
+en_final_cn_log_path = '/datapool/home/hujk17/chenxueyuan/en_final_cn_log_withkdtree'
+en_final_cn_idx_path = os.path.join(en_final_cn_log_path, 'en_final_cn_idx_withkdtree.npy')
 
 
 # 写
-projected_wav_dir = '/datapool/home/hujk17/chenxueyuan/projected_wavs_16000'
+projected_wav_dir = '/datapool/home/hujk17/chenxueyuan/projected_wavs_16000_withkdtree'
 if os.path.exists(projected_wav_dir) is False:
     os.makedirs(projected_wav_dir)
 
@@ -53,7 +53,7 @@ Linear_DIM = 201
 PPG_DIM = 345                                              #每一帧ppg的维度
 
 en_all_cnt = 1 # 
-cn_all_cnt = 1000
+cn_all_cnt = 5000
 
 
 
