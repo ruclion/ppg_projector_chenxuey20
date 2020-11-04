@@ -1,8 +1,9 @@
+# 为了验证代码正确性，找ppg英文自己的top3的第3个, 然后把所有的ppg和linear和wav都存起来，共之后对比NN版本
+
 import os
 import time
 import numpy as np
 from tqdm import tqdm
-from scipy import stats
 from sklearn.cluster import KMeans
 from sklearn.neighbors import KDTree
 from audio import hparams as audio_hparams
@@ -40,25 +41,26 @@ K_small = 1     #类
 K = 20000     #类
 
 en_all_cnt = 3
-cn_all_cnt = 500
+# cn_all_cnt = 12
+cn_all_cnt = 9500
 
 
 cn_raw_list_path = '/datapool/home/hujk17/chenxueyuan/DataBaker_Bilingual_CN/meta_good.txt'
 cn_raw_ppg_path = '/datapool/home/hujk17/chenxueyuan/DataBaker_Bilingual_CN/ppg_from_generate_batch'
 cn_raw_linear_dir ='/datapool/home/hujk17/chenxueyuan/DataBaker_Bilingual_CN/spec_5ms_by_audio_2'
 
-en_raw_list_path = '/datapool/home/hujk17/chenxueyuan/LJSpeech-1.1/meta_good.txt'
-en_raw_ppg_path = '/datapool/home/hujk17/chenxueyuan/LJSpeech-1.1/ppg_from_generate_batch'
-en_raw_linear_dir = '/datapool/home/hujk17/chenxueyuan/LJSpeech-1.1/spec_5ms_by_audio_2'
+en_raw_list_path = '/datapool/home/hujk17/chenxueyuan/DataBaker_Bilingual_CN/meta_good.txt'
+en_raw_ppg_path = '/datapool/home/hujk17/chenxueyuan/DataBaker_Bilingual_CN/ppg_from_generate_batch'
+en_raw_linear_dir = '/datapool/home/hujk17/chenxueyuan/DataBaker_Bilingual_CN/spec_5ms_by_audio_2'
 
 
 # 写
-en_final_cn_log_path = '/datapool/home/hujk17/chenxueyuan/en_final_cn_log_withkdtree_kmeans1_findA_dist2KL'
+en_final_cn_log_path = '/datapool/home/hujk17/chenxueyuan/en_final_cn_log_withkdtree_kmeans1_findA_dist1_allForChinese_outPPGSPE'
 if os.path.exists(en_final_cn_log_path) is False:
     os.makedirs(en_final_cn_log_path)
-en_final_cn_idx_path = os.path.join(en_final_cn_log_path, 'en_final_cn_idx_withkdtree_kmeans1_findA_dist2KL.npy')
+en_final_cn_idx_path = os.path.join(en_final_cn_log_path, 'en_final_cn_idx_withkdtree_kmeans1_findA_dist1_allForChinese_outPPGSPE.npy')
 # 写
-projected_wav_dir = '/datapool/home/hujk17/chenxueyuan/projected_wavs_16000_withkdtree_kmeans1_findA_dist2KL'
+projected_wav_dir = '/datapool/home/hujk17/chenxueyuan/projected_wavs_16000_withkdtree_kmeans1_findA_dist1_allForChinese_outPPGSPE'
 if os.path.exists(projected_wav_dir) is False:
     os.makedirs(projected_wav_dir)
 
@@ -136,11 +138,6 @@ def dist(ppg_e, ppg_c):
     ans = np.linalg.norm(ppg_e - ppg_c)
     return ans
 
-
-def dist2KL(vec1, vec2):
-    ans = stats.entropy(vec1,vec2) + stats.entropy(vec2,vec1)
-    return ans
-
     
 def cluster_kmeans(all, K): 
     class_as_index = KMeans(n_clusters=K, random_state=0).fit_predict(all)
@@ -159,28 +156,14 @@ def bruce_find_closest(i, now_class, en_l, cn_l, class_cn_ppgs):
             ans_id = j                      #cn_id  距离每一个en_ppg最近的cn_ppg的帧id
     return ans, ans_id
 
-
-def bruce_find_closest_dist2KL(i, now_class, en_l, cn_l, class_cn_ppgs):
-    ans = 1e100 
-    ans_id = -1     
-    for j in class_cn_ppgs[now_class]:      #class_cn_ppgs[now_class] = [2,8,19,...]或[3,48,79,...]或[4,5,36,...]或... eg,[2,8,19,...]
-        e = en_l[i]                         #e = en_l[0], en_l[1], en_l[2], ...
-        c = cn_l[j]                         #c = cn_l[2], cn_l[8], ...
-        dist_e_c = dist2KL(e, c)
-        if dist_e_c < ans:
-            ans = dist_e_c
-            ans_id = j                      #cn_id  距离每一个en_ppg最近的cn_ppg的帧id
-    return ans, ans_id
-
-
 def kdtree_find_closest(i, en_l, now_class_cn_ppgs_value_kdtree, now_class_cn_ppgs):
     e = en_l[i]
     e_2d = np.expand_dims(e, axis=0)
     # print(e_2d.shape)
-    dist, ind = now_class_cn_ppgs_value_kdtree.query(e_2d)
-    # print(dist, ind)
-    dist = dist[0][0]
-    ind = ind[0][0]
+    dist, ind = now_class_cn_ppgs_value_kdtree.query(e_2d, k=3)
+    print(dist, ind)
+    dist = dist[0][2]
+    ind = ind[0][2]
     real_ind = now_class_cn_ppgs[ind]
     return dist, real_ind
 
@@ -214,13 +197,13 @@ def main():
     
     #... a[100], a[0].1, 2, 3,...  
     class_cn_ppgs = list()                      #建立一个列表class_cn_ppgs，列表中包含K个空列表class_cn_ppg = [[],[],[],...]
-    # class_cn_ppgs_value = list()
-    # class_cn_ppgs_value_kdtree = list()
+    class_cn_ppgs_value = list()
+    class_cn_ppgs_value_kdtree = list()
     for i in range(K_small):
         l = list()
         class_cn_ppgs.append(l)    #append()在列表后面添加元素
-        # l_value = list()
-        # class_cn_ppgs_value.append(l_value)
+        l_value = list()
+        class_cn_ppgs_value.append(l_value)
         
 
     # 构造类的信息, 筛选出每个类里都有哪些中文的ppg; 并且平均每个类有100个中文ppg
@@ -229,7 +212,7 @@ def main():
         idx = i + en_ppg_l_len
         now_class = all_class[idx]                #now_class = cn_label  可能是0-1999
         class_cn_ppgs[now_class].append(i)        #class_cn_ppg = [[2,8,19,...],[3,48,79,...],[4,5,36,...],...] 2000个类，每个类中含有cn_l中对应帧ppg的序列号
-        # class_cn_ppgs_value[now_class].append(cn_ppg_l[i])
+        class_cn_ppgs_value[now_class].append(cn_ppg_l[i])
         
     print('prepare for class infomation use:', time.time() - last_time)
     print('start construct kdtree')
@@ -242,8 +225,8 @@ def main():
             print('cluster', i, 'len', l, 'start construct kd-tree')
             last_time = time.time()
             
-            # class_cn_ppgs_value[i] = np.asarray(class_cn_ppgs_value[i])
-            # class_cn_ppgs_value_kdtree.append(KDTree(class_cn_ppgs_value[i], leaf_size=40) )
+            class_cn_ppgs_value[i] = np.asarray(class_cn_ppgs_value[i])
+            class_cn_ppgs_value_kdtree.append(KDTree(class_cn_ppgs_value[i], leaf_size=40) )
 
             print('end cluster', i, 'kd-tree use:', time.time() - last_time)
     print('have class:', have_cnt)
@@ -259,12 +242,12 @@ def main():
         now_class = all_class[i]                   #now_class = en_label  可能是0-1999 
 
         # 暴力寻找
-        ans1, ans_id1 = bruce_find_closest_dist2KL(i, now_class, en_ppg_l, cn_ppg_l, class_cn_ppgs)
+        # ans1, ans_id1 = bruce_find_closest(i, now_class, en_ppg_l, cn_ppg_l, class_cn_ppgs)
 
         # k-d tree寻找
-        # ans, ans_id = kdtree_find_closest(i, en_ppg_l, class_cn_ppgs_value_kdtree[now_class], class_cn_ppgs[now_class])
+        ans, ans_id = kdtree_find_closest(i, en_ppg_l, class_cn_ppgs_value_kdtree[now_class], class_cn_ppgs[now_class])
         # assert np.absolute(ans1 - ans) < eps and ans_id1 == ans_id
-        en_final_cn_idx[i] = ans_id1
+        en_final_cn_idx[i] = ans_id
         
     np.save(en_final_cn_idx_path, en_final_cn_idx)
     print('end write map array, all use:', time.time() - last_time)
@@ -285,15 +268,41 @@ def main():
         print('en id from 0:', e_ppg_id[:10])
         c_ppg_id_projected = ppg_project(e_ppg_id, en_final_cn_idx) # 从中文的零开始
 
-        # 找到linear
+        # 找到ppg并存储
+        c_ppgs_projected = list()
+        for i in c_ppg_id_projected:
+            c_ppgs_projected.append(cn_ppg_l[i])
+        c_ppgs_projected = np.asarray(c_ppgs_projected)
+        save_ppg_name_projected = f + '_cn_ppg_projected.npy'
+        np.save(os.path.join(projected_wav_dir, save_ppg_name_projected), c_ppgs_projected)
+
+        # 找到linear并存储
         c_lineas_projected = list()
         for i in c_ppg_id_projected:
             c_lineas_projected.append(cn_linear_l[i])
         c_lineas_projected = np.asarray(c_lineas_projected)
-        save_linear_name = f + '_cn_linear_projected.wav'
-        write_wav(os.path.join(projected_wav_dir, save_linear_name), normalized_db_spec2wav(c_lineas_projected))
-        save_linear_original_name = f + '_en_linear_original.wav'
-        write_wav(os.path.join(projected_wav_dir, save_linear_original_name), normalized_db_spec2wav(linears))
+        save_linear_name_projected = f + '_cn_linear_projected.npy'
+        np.save(os.path.join(projected_wav_dir, save_linear_name_projected), c_lineas_projected)
+
+        # 计算音频wav并存储
+        save_wav_name_projected = f + '_cn_wav_projected.wav'
+        write_wav(os.path.join(projected_wav_dir, save_wav_name_projected), normalized_db_spec2wav(c_lineas_projected))
+        
+
+        #----------接下来是original的ppg，linear，wav存储，用来对比-----------
+
+        # 找到ppg并存储
+        save_ppg_name_original = f + '_en_ppg_original.npy'
+        np.save(os.path.join(projected_wav_dir, save_ppg_name_original), wav_ppgs)
+
+        # 找到linear并存储
+        save_linear_name_original = f + '_en_linear_original.npy'
+        np.save(os.path.join(projected_wav_dir, save_linear_name_original), linears)
+
+        # 计算音频wav并存储-original
+        save_wav_name_original = f + '_en_wav_original.wav'
+        write_wav(os.path.join(projected_wav_dir, save_wav_name_original), normalized_db_spec2wav(linears))
+
 
     print('end findA, use:', time.time() - last_time)
     print('program use:', time.time() - program_time)
